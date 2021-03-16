@@ -8,11 +8,11 @@ import random as rd
 import numpy as np
 
 from bokeh.layouts import column, row
-from bokeh.models import CustomJS, Slider
+from bokeh.models import CustomJS, Slider, HoverTool
 from bokeh.plotting import figure, output_file, show, ColumnDataSource
 
 #Experimental data plotting
-file = open("Downloads\LevangieMcKeever_3000.data", "r")
+file = open("LevangieMcKeever_3000.data", "r")
 file = file.read()
 
 lines = file.split("\n")
@@ -24,6 +24,9 @@ hist, edges = np.histogram(decays,bins=400)
 
 plot = figure(title="Muon Decays",width=1500,height=800)
 plot.quad(top=hist, bottom=0, left=edges[:-1], right=edges[1:])
+
+hovertool = HoverTool(tooltips=[("Number of decays","@top"),("Time bin edges in microseconds","@left, @right")])
+plot.tools.append(hovertool)
 
 #Create the curvefit based on tau including the slider and the value of ln(L)
 xL = np.linspace(0,5,10000)
@@ -39,13 +42,16 @@ lnL=sum([(hist[k-1] * np.log(y[k-1]*0.05) - (y[k-1]*0.05)) for k in range(1,len(
 
 source = ColumnDataSource(data=dict(x=x,y=y,hist=hist))
 
-lnL_source = ColumnDataSource(data=dict(x=[],y=[]))
+lnL_source = ColumnDataSource(data=dict(x=[],y=[],color=[],size=[]))
 lnL_plot = figure(title="Ln(L) in reltation to tau", width=400, height=400)
-lnL_plot.scatter('x','y',source=lnL_source)
+lnL_plot.scatter('x','y',color='color', size='size', source=lnL_source)
+
+lnL_hovertool = HoverTool(tooltips=[("ln(L)","@y"),("tau","@x")])
+lnL_plot.tools.append(lnL_hovertool)
 
 plot.line('x','y', source=source, line_width=2, line_color='#ff0000')
 
-tau_slider = Slider(start=0, end=5, value=2.5, step=.01, title="Tau")
+tau_slider = Slider(start=0.01, end=5, value=2.5, step=.01, title="Tau")
 
 callback = CustomJS(args=dict(source=source, lnL_source=lnL_source, tau=tau_slider), code = """
     const data = source.data;
@@ -55,23 +61,35 @@ callback = CustomJS(args=dict(source=source, lnL_source=lnL_source, tau=tau_slid
     const hist = data['hist'];
     
     const lnL_data = lnL_source.data;
+    var clr = lnL_data['color'];
+    var sz = lnL_data['size'];
     var lnL_x = lnL_data['x'];
     var lnL_y = lnL_data['y'];
     var lnL = 0;
     
     for (var i = 0; i < x.length; i++){
-            y[i] = (3000*0.05)/t * Math.exp((-x[i])/t)
+            y[i] = (3000*0.05)/t * Math.exp((-x[i])/t);
     }
     
     for (var i = 0; i < x.length; i++){
             lnL += hist[i] * Math.log(y[i]*0.05) - (y[i]*0.05);
     }
     
-    lnL_y.push(lnL);
-    lnL_x.push(t);
+    if (!isNaN(lnL)) {
+            lnL_y.push(lnL);
+            lnL_x.push(t);
+    }
     
-    console.log(lnL_x,lnL_y);
-    
+    for (var i = 0; i < lnL_y.length; i++){
+            if (lnL_y[i] == Math.max(...lnL_y)){
+                    clr[i] = '#ff0000';
+                    sz[i] = 10;
+            } else {
+                    clr[i] = '#0000ff';
+                    sz[i] = 4;
+            }
+    }
+            
     source.change.emit();
     lnL_source.change.emit();
 """)
