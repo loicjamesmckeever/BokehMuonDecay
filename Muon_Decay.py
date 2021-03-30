@@ -21,18 +21,15 @@ lines.pop()
 decays = [int(line.split(" ")[0])/1000 for line in lines if int(line.split(" ")[0]) < 40000]
 
 hist, edges = np.histogram(decays,bins=400, range=(0,max(decays)))
-
 hist_err = [(item - np.sqrt(item),item + np.sqrt(item)) for item in hist]
+hist_err_val = [np.sqrt(item) for item in hist]
 
 plot = figure(title="Muon Decays",width=1500,height=800)
 plot.quad(top=hist, bottom=hist, left=edges[:-1], right=edges[1:])
 
 #Create the MLE curvefit based on tau including the slider and the value of ln(L)
-x = []
-y = []
-for j in range(1,401):
-    x.append((edges[j-1]+edges[j])/2)
-    y.append(((3000*0.05)/2.5)*np.exp((-x[j-1])/2.5))
+x = [(edges[j-1]+edges[j])/2 for j in range(1,401)]
+y = [((3000*0.05)/2.5)*np.exp((-x[j-1])/2.5) for j in range(1,401)]
    
 lnL=sum([(hist[k-1] * np.log(y[k-1]*0.05) - (y[k-1]*0.05)) for k in range(1,len(hist)+1)])
 
@@ -42,7 +39,7 @@ plot.multi_line(x_err, hist_err)
 
 source = ColumnDataSource(data=dict(x=x,y=y,hist=hist))
 
-lnL_source = ColumnDataSource(data=dict(x=[],y=[],color=[],size=[]))
+lnL_source = ColumnDataSource(data=dict(x=[2.5],y=[lnL],color=['#ff0000'],size=[10]))
 lnL_plot = figure(title="Ln(L) in reltation to tau", width=400, height=400)
 lnL_plot.scatter('x','y',color='color', size='size', source=lnL_source)
 
@@ -97,8 +94,91 @@ callback = CustomJS(args=dict(source=source, lnL_source=lnL_source, tau=tau_slid
 tau_slider.js_on_change('value',callback)
 
 #Create the LS curve fit
+lnbins = [np.log(item) if item > 0 else 0 for item in hist]
+y_ls = [np.log(item) if item > 0 else 0 for item in y]
 
+B = []
+for i in range(0,400):
+    l = (lnbins[i]-y_ls[i])**2
+    h = (hist_err_val[i]/hist[i])**2
+    if str(h) == 'nan':
+        B.append(0)
+    else:
+        B.append(l/h)
 
+chi2 = sum(B)
+
+source_ls = ColumnDataSource(data=dict(x=x,y=y,y_ls=y_ls,lnbins=lnbins,hist=hist,hist_err_val=hist_err_val,))
+
+chi2_source = ColumnDataSource(data=dict(x=[2.5],y=[chi2],color=['#ff0000'],size=[10]))
+chi2_plot = figure(title="X^2 in reltation to tau", width=400, height=400)
+chi2_plot.scatter('x','y',color='color', size='size', source=chi2_source)
+
+chi2_hovertool = HoverTool(tooltips=[("X^2","@y"),("tau","@x")])
+chi2_plot.tools.append(chi2_hovertool)
+
+callback_ls = CustomJS(args=dict(source=source_ls, chi2_source=chi2_source, tau=tau_slider), code = """
+    const data = source.data;
+    const t = tau.value;
+    const x = data['x'];
+    const y = data['y'];
+    const hist = data['hist'];
+    const y_ls = data['y_ls'];
+    const lnbins = data['lnbins'];
+    const hist_err_val = data['hist_err_val']
+    
+    const chi2_data = chi2_source.data;
+    var clr = chi2_data['color'];
+    var sz = chi2_data['size'];
+    var chi2_x = chi2_data['x'];
+    var chi2_y = chi2_data['y'];
+    var B = [];
+    var chi2 = 0;
+    
+    for (var i = 0; i < x.length; i++){
+            y[i] = (3000*0.05)/t * Math.exp((-x[i])/t);
+    }
+    
+    for (var i = 0; i < x.length; i++){
+            if (y[i] > 0){
+                    y_ls[i] = Math.log(y[i]);
+            } else {
+                    y_ls[i] = 0;
+            }
+    }
+            
+    for (var i = 0; i < x.length; i++){
+            var l = (lnbins[i]-y_ls[i])**2;
+            var h = (hist_err_val[i]/hist[i])**2;
+            B.push(l/h);     
+    }
+    
+    for (var i = 0; i < x.length; i++){
+            if (!isNaN(B[i])){
+                    chi2 += B[i];
+            }
+    }
+    
+    if (!isNaN(chi2) && !chi2_x.includes(t) ) {
+            chi2_y.push(chi2);
+            chi2_x.push(t);
+    }
+    
+    for (var i = 0; i < chi2_y.length; i++){
+            if (chi2_y[i] == Math.min(...chi2_y)){
+                    clr[i] = '#ff0000';
+                    sz[i] = 10;
+            } else {
+                    clr[i] = '#0000ff';
+                    sz[i] = 4;
+            }
+    }
+    console.log(chi2)
+    source.change.emit();
+    chi2_source.change.emit();
+""")
+
+tau_slider.js_on_change('value',callback_ls)
 
 #Simulated data plotting
 tau = 2200
@@ -111,5 +191,5 @@ sim_plot.quad(top=sim_hist, bottom=0, left=sim_edges[:-1], right=sim_edges[1:],f
 
 output_file("Muon_Decay.html", title="Muon Decay")
 
-layout = column(row(plot, column(tau_slider, lnL_plot)), sim_plot)
+layout = column(row(plot, column(tau_slider, lnL_plot, chi2_plot)), sim_plot)
 show(layout)
