@@ -41,7 +41,7 @@ def MLE_LS_curve_fitting(hist, edges):
     lnL_hovertool = HoverTool(tooltips=[("ln(L)","@y"),("tau","@x")])
     lnL_plot.tools.append(lnL_hovertool)
     
-    plot.line('x','y', source=source, line_width=2, line_color='#ff0000')
+    plot.line('x','y', source=source, line_width=2, line_color='#ff0000', legend_label='MLE')
     
     tau_slider = Slider(start=0, end=5, value=2.5, step=.01, title="Tau")
     
@@ -114,7 +114,11 @@ def MLE_LS_curve_fitting(hist, edges):
     chi2_hovertool = HoverTool(tooltips=[("X^2","@y"),("tau","@x")])
     chi2_plot.tools.append(chi2_hovertool)
     
-    callback_ls = CustomJS(args=dict(source=source_ls, chi2_source=chi2_source, tau=tau_slider), code = """
+    plot.line('x','y', source=source_ls, line_width=2, line_color='#ffa500', legend_label='LS')
+    
+    tau_slider_ls = Slider(start=0, end=5, value=2.5, step=.001, title="Tau")
+    
+    callback_ls = CustomJS(args=dict(source=source_ls, chi2_source=chi2_source, tau=tau_slider_ls), code = """
         const data = source.data;
         const t = tau.value;
         const x = data['x'];
@@ -170,13 +174,17 @@ def MLE_LS_curve_fitting(hist, edges):
                         sz[i] = 4;
                 }
         }
-        console.log(chi2)
         source.change.emit();
         chi2_source.change.emit();
     """)
     
-    tau_slider.js_on_change('value',callback_ls)
-    return plot, tau_slider, lnL_plot, chi2_plot
+    tau_slider_ls.js_on_change('value',callback_ls)
+    
+    #Legend location and interaction option
+    plot.legend.location = "top_right"
+    plot.legend.click_policy = "hide"
+    
+    return plot, tau_slider, lnL_plot, tau_slider_ls, chi2_plot
 
 #Experimental data plotting
 file = open("LevangieMcKeever_3000.data", "r")
@@ -188,20 +196,20 @@ lines.pop()
 decays = [int(line.split(" ")[0])/1000 for line in lines if int(line.split(" ")[0]) < 40000]
 
 hist, edges = np.histogram(decays,bins=400, range=(0,max(decays)))
-plot, tau_slider, lnL_plot, chi2_plot = MLE_LS_curve_fitting(hist, edges)
+plot, tau_slider, lnL_plot, tau_slider_ls, chi2_plot = MLE_LS_curve_fitting(hist, edges)
 
 #Simulated data plotting
 tau = 2.2
 sim_decays = [-tau*np.log(rd.random()) for i in range(0,3000)]
 
 sim_hist, sim_edges=np.histogram(sim_decays, bins=400, range=(0,max(sim_decays)))
-sim_plot, sim_tau_slider, sim_lnL_plot, sim_chi2_plot = MLE_LS_curve_fitting(sim_hist, sim_edges)
+sim_plot, sim_tau_slider, sim_lnL_plot, sim_tau_slider_ls, sim_chi2_plot = MLE_LS_curve_fitting(sim_hist, sim_edges)
 
 # sim_plot = figure(title="Simulated Muon Decays",width=1500,height=800)
 # sim_plot.quad(top=sim_hist, bottom=0, left=sim_edges[:-1], right=sim_edges[1:],fill_color='#58e07c')
 
 output_file("Muon_Decay.html", title="Muon Decay")
 
-layout = column(row(plot, column(tau_slider, lnL_plot, chi2_plot)), 
-                row(sim_plot, column(sim_tau_slider, sim_lnL_plot, sim_chi2_plot)))
+layout = column(row(plot, column(tau_slider, lnL_plot, tau_slider_ls, chi2_plot)), 
+                row(sim_plot, column(sim_tau_slider, sim_lnL_plot, sim_tau_slider_ls, sim_chi2_plot)))
 show(layout)
