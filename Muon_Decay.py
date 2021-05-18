@@ -8,7 +8,7 @@ import random as rd
 import numpy as np
 
 from bokeh.layouts import column, row
-from bokeh.models import CustomJS, Slider, HoverTool
+from bokeh.models import CustomJS, Slider, HoverTool, Label
 from bokeh.plotting import figure, output_file, show, ColumnDataSource
 
 def MLE_LS_curve_fitting(hist, edges):
@@ -43,9 +43,14 @@ def MLE_LS_curve_fitting(hist, edges):
     
     plot.line('x','y', source=source, line_width=2, line_color='#ff0000', legend_label='MLE')
     
+    lnL_label = Label(x=70, y=70, x_units='screen', y_units='screen',
+                 text='ln(L) = ' + str(round(lnL, 2)), render_mode='css',
+                 border_line_color='black', border_line_alpha=1.0,
+                 background_fill_color='white', background_fill_alpha=1.0)
+    
     tau_slider = Slider(start=0, end=5, value=2.5, step=.01, title="Tau")
     
-    callback = CustomJS(args=dict(source=source, lnL_source=lnL_source, tau=tau_slider), code = """
+    callback = CustomJS(args=dict(source=source, lnL_source=lnL_source, tau=tau_slider, lnL_label=lnL_label), code = """
         const data = source.data;
         const t = tau.value;
         const x = data['x'];
@@ -67,6 +72,8 @@ def MLE_LS_curve_fitting(hist, edges):
                 lnL += hist[i] * Math.log(y[i]*0.05) - (y[i]*0.05);
         }
         
+        lnL_label.text = 'ln(L) = ' + lnL.toFixed(2);
+        
         if (!isNaN(lnL) && !lnL_x.includes(t) ) {
                 lnL_y.push(lnL);
                 lnL_x.push(t);
@@ -84,9 +91,12 @@ def MLE_LS_curve_fitting(hist, edges):
                 
         source.change.emit();
         lnL_source.change.emit();
+        lnL_label.change.emit();
     """)
     
     tau_slider.js_on_change('value',callback)
+    
+    lnL_plot.add_layout(lnL_label)
     
     #Create the LS curve fit
     lnbins = [np.log(item) if item > 0 else 0 for item in hist]
