@@ -8,7 +8,7 @@ import random as rd
 import numpy as np
 
 from bokeh.layouts import column, row
-from bokeh.models import CustomJS, Slider, HoverTool, Label
+from bokeh.models import CustomJS, Slider, HoverTool, Label, Button
 from bokeh.plotting import figure, output_file, show, ColumnDataSource
 
 def MLE_LS_curve_fitting(hist, edges):
@@ -48,7 +48,7 @@ def MLE_LS_curve_fitting(hist, edges):
                  border_line_color='black', border_line_alpha=1.0,
                  background_fill_color='white', background_fill_alpha=1.0)
     
-    tau_slider = Slider(start=0, end=5, value=2.5, step=.01, title="Tau")
+    tau_slider = Slider(start=0.01, end=5, value=2.5, step=.01, title="Tau")
     
     callback = CustomJS(args=dict(source=source, lnL_source=lnL_source, tau=tau_slider, lnL_label=lnL_label), code = """
         const data = source.data;
@@ -96,6 +96,53 @@ def MLE_LS_curve_fitting(hist, edges):
     
     tau_slider.js_on_change('value',callback)
     
+    button = Button(label="Maximize ln(L)", button_type="success")
+    button.js_on_click(CustomJS(args=dict(tau=tau_slider, lnL_source=lnL_source), code="""
+        const lnL_data = lnL_source.data;
+        const lnL_y = lnL_data['y'];
+        
+        var tracker = [];
+        
+        tracker[1] = lnL_y[lnL_y.length-1];
+        
+        tau.value += 0.01;
+        tau.change.emit();
+        
+        tracker[2] = lnL_y[lnL_y.length-1];
+        
+        tau.value -= 0.02;
+        tau.change.emit();
+        
+        tracker[0] = lnL_y[lnL_y.length-1];
+        
+        tau.value += 0.01;
+        tau.change.emit();
+        
+                
+        while (tracker[1] != Math.max(...tracker)) {
+                if (tracker[0] > tracker[1]) {
+                        tau.value -= 0.02;
+                        tau.change.emit();
+                        tracker.unshift(lnL_y[lnL_y.length-1]);
+                        tracker.pop();
+                        
+                        tau.value += 0.01;
+                        tau.change.emit();
+                        
+                } else if (tracker[2] > tracker[1]) {
+                        tau.value += 0.02;
+                        tau.change.emit();
+                        tracker.push(lnL_y[lnL_y.length-1]);
+                        tracker.shift();
+                       
+                        tau.value -= 0.01;
+                        tau.change.emit();
+                        
+                }
+        }
+                
+    """))
+    
     lnL_plot.add_layout(lnL_label)
     
     #Create the LS curve fit
@@ -105,10 +152,10 @@ def MLE_LS_curve_fitting(hist, edges):
     B = []
     for i in range(0,400):
         l = (lnbins[i]-y_ls[i])**2
-        h = (hist_err_val[i]/hist[i])**2
-        if str(h) == 'nan':
+        if hist[i] == 0:
             B.append(0)
         else:
+            h = (hist_err_val[i]/hist[i])**2
             B.append(l/h)
     
     chi2 = sum(B)
@@ -126,9 +173,14 @@ def MLE_LS_curve_fitting(hist, edges):
     
     plot.line('x','y', source=source_ls, line_width=2, line_color='#ffa500', legend_label='LS')
     
-    tau_slider_ls = Slider(start=0, end=5, value=2.5, step=.001, title="Tau")
+    tau_slider_ls = Slider(start=0.01, end=5, value=2.5, step=.001, title="Tau")
     
-    callback_ls = CustomJS(args=dict(source=source_ls, chi2_source=chi2_source, tau=tau_slider_ls), code = """
+    chi2_label = Label(x=70, y=70, x_units='screen', y_units='screen',
+                 text='X^2 = ' + str(round(chi2, 2)), render_mode='css',
+                 border_line_color='black', border_line_alpha=1.0,
+                 background_fill_color='white', background_fill_alpha=1.0)
+    
+    callback_ls = CustomJS(args=dict(source=source_ls, chi2_source=chi2_source, tau=tau_slider_ls, chi2_label=chi2_label), code = """
         const data = source.data;
         const t = tau.value;
         const x = data['x'];
@@ -170,6 +222,8 @@ def MLE_LS_curve_fitting(hist, edges):
                 }
         }
         
+         chi2_label.text = 'X^2 = ' + chi2.toFixed(2);
+        
         if (!isNaN(chi2) && !chi2_x.includes(t) ) {
                 chi2_y.push(chi2);
                 chi2_x.push(t);
@@ -186,15 +240,18 @@ def MLE_LS_curve_fitting(hist, edges):
         }
         source.change.emit();
         chi2_source.change.emit();
+        chi2_label.change.emit()
     """)
     
     tau_slider_ls.js_on_change('value',callback_ls)
+    
+    chi2_plot.add_layout(chi2_label)
     
     #Legend location and interaction option
     plot.legend.location = "top_right"
     plot.legend.click_policy = "hide"
     
-    return plot, tau_slider, lnL_plot, tau_slider_ls, chi2_plot
+    return plot, tau_slider, lnL_plot, tau_slider_ls, chi2_plot, button
 
 #Experimental data plotting
 file = open("LevangieMcKeever_3000.data", "r")
@@ -206,20 +263,20 @@ lines.pop()
 decays = [int(line.split(" ")[0])/1000 for line in lines if int(line.split(" ")[0]) < 40000]
 
 hist, edges = np.histogram(decays,bins=400, range=(0,max(decays)))
-plot, tau_slider, lnL_plot, tau_slider_ls, chi2_plot = MLE_LS_curve_fitting(hist, edges)
+plot, tau_slider, lnL_plot, tau_slider_ls, chi2_plot, button = MLE_LS_curve_fitting(hist, edges)
 
 #Simulated data plotting
 tau = 2.2
 sim_decays = [-tau*np.log(rd.random()) for i in range(0,3000)]
 
 sim_hist, sim_edges=np.histogram(sim_decays, bins=400, range=(0,max(sim_decays)))
-sim_plot, sim_tau_slider, sim_lnL_plot, sim_tau_slider_ls, sim_chi2_plot = MLE_LS_curve_fitting(sim_hist, sim_edges)
+sim_plot, sim_tau_slider, sim_lnL_plot, sim_tau_slider_ls, sim_chi2_plot, button2 = MLE_LS_curve_fitting(sim_hist, sim_edges)
 
 # sim_plot = figure(title="Simulated Muon Decays",width=1500,height=800)
 # sim_plot.quad(top=sim_hist, bottom=0, left=sim_edges[:-1], right=sim_edges[1:],fill_color='#58e07c')
 
 output_file("Muon_Decay.html", title="Muon Decay")
 
-layout = column(row(plot, column(tau_slider, lnL_plot, tau_slider_ls, chi2_plot)), 
+layout = column(row(plot, column(tau_slider, lnL_plot, button, tau_slider_ls, chi2_plot)), 
                 row(sim_plot, column(sim_tau_slider, sim_lnL_plot, sim_tau_slider_ls, sim_chi2_plot)))
 show(layout)
