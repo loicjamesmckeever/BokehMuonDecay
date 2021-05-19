@@ -91,7 +91,6 @@ def MLE_LS_curve_fitting(hist, edges):
                 
         source.change.emit();
         lnL_source.change.emit();
-        lnL_label.change.emit();
     """)
     
     tau_slider.js_on_change('value',callback)
@@ -105,42 +104,42 @@ def MLE_LS_curve_fitting(hist, edges):
         
         tracker[1] = lnL_y[lnL_y.length-1];
         
-        tau.value += 0.01;
-        tau.change.emit();
-        
+        tau.value = float_ops(tau.value, 1);
         tracker[2] = lnL_y[lnL_y.length-1];
         
-        tau.value -= 0.02;
-        tau.change.emit();
-        
+        tau.value = float_ops(tau.value, -2);
         tracker[0] = lnL_y[lnL_y.length-1];
         
-        tau.value += 0.01;
-        tau.change.emit();
-        
+        tau.value = float_ops(tau.value, 1);
                 
         while (tracker[1] != Math.max(...tracker)) {
                 if (tracker[0] > tracker[1]) {
-                        tau.value -= 0.02;
-                        tau.change.emit();
+                        
+                        tau.value = float_ops(tau.value, -2);
+
                         tracker.unshift(lnL_y[lnL_y.length-1]);
                         tracker.pop();
-                        
-                        tau.value += 0.01;
-                        tau.change.emit();
-                        
+
+                        tau.value = float_ops(tau.value, 1);
+                    
                 } else if (tracker[2] > tracker[1]) {
-                        tau.value += 0.02;
-                        tau.change.emit();
+                
+                        tau.value = float_ops(tau.value, 2);
+
                         tracker.push(lnL_y[lnL_y.length-1]);
                         tracker.shift();
                        
-                        tau.value -= 0.01;
-                        tau.change.emit();
-                        
+                        tau.value = float_ops(tau.value, -1);   
                 }
         }
-                
+        
+        function float_ops(float, int) {
+        
+                float_int = Math.round(float*100);
+                float_int += int;
+                float_int /= 100;
+            return float_int; 
+        }
     """))
     
     lnL_plot.add_layout(lnL_label)
@@ -240,10 +239,56 @@ def MLE_LS_curve_fitting(hist, edges):
         }
         source.change.emit();
         chi2_source.change.emit();
-        chi2_label.change.emit()
     """)
     
     tau_slider_ls.js_on_change('value',callback_ls)
+    
+    chi2_button = Button(label="Minimize X^2", button_type="success")
+    chi2_button.js_on_click(CustomJS(args=dict(tau=tau_slider_ls, chi2_source=chi2_source), code="""
+        const chi2_data = chi2_source.data;
+        const chi2_y = chi2_data['y'];
+        
+        var tracker = [];
+        
+        tracker[1] = chi2_y[chi2_y.length-1];
+        
+        tau.value = float_ops(tau.value, 1);
+        tracker[2] = chi2_y[chi2_y.length-1];
+        
+        tau.value = float_ops(tau.value, -2);
+        tracker[0] = chi2_y[chi2_y.length-1];
+        
+        tau.value = float_ops(tau.value, 1);
+                
+        while (tracker[1] != Math.min(...tracker)) {
+                if (tracker[0] < tracker[1]) {
+                        
+                        tau.value = float_ops(tau.value, -2);
+
+                        tracker.unshift(chi2_y[chi2_y.length-1]);
+                        tracker.pop();
+
+                        tau.value = float_ops(tau.value, 1);
+                    
+                } else if (tracker[2] < tracker[1]) {
+                
+                        tau.value = float_ops(tau.value, 2);
+
+                        tracker.push(chi2_y[chi2_y.length-1]);
+                        tracker.shift();
+                       
+                        tau.value = float_ops(tau.value, -1);   
+                }
+        }
+        
+        function float_ops(float, int) {
+        
+                float_int = Math.round(float*100);
+                float_int += int;
+                float_int /= 100;
+            return float_int; 
+        }
+    """))
     
     chi2_plot.add_layout(chi2_label)
     
@@ -251,7 +296,7 @@ def MLE_LS_curve_fitting(hist, edges):
     plot.legend.location = "top_right"
     plot.legend.click_policy = "hide"
     
-    return plot, tau_slider, lnL_plot, tau_slider_ls, chi2_plot, button
+    return plot, tau_slider, lnL_plot, tau_slider_ls, chi2_plot, button, chi2_button
 
 #Experimental data plotting
 file = open("LevangieMcKeever_3000.data", "r")
@@ -263,20 +308,20 @@ lines.pop()
 decays = [int(line.split(" ")[0])/1000 for line in lines if int(line.split(" ")[0]) < 40000]
 
 hist, edges = np.histogram(decays,bins=400, range=(0,max(decays)))
-plot, tau_slider, lnL_plot, tau_slider_ls, chi2_plot, button = MLE_LS_curve_fitting(hist, edges)
+plot, tau_slider, lnL_plot, tau_slider_ls, chi2_plot, button, chi2_button = MLE_LS_curve_fitting(hist, edges)
 
 #Simulated data plotting
 tau = 2.2
 sim_decays = [-tau*np.log(rd.random()) for i in range(0,3000)]
 
 sim_hist, sim_edges=np.histogram(sim_decays, bins=400, range=(0,max(sim_decays)))
-sim_plot, sim_tau_slider, sim_lnL_plot, sim_tau_slider_ls, sim_chi2_plot, button2 = MLE_LS_curve_fitting(sim_hist, sim_edges)
+sim_plot, sim_tau_slider, sim_lnL_plot, sim_tau_slider_ls, sim_chi2_plot, sim_button, sim_chi2_button = MLE_LS_curve_fitting(sim_hist, sim_edges)
 
 # sim_plot = figure(title="Simulated Muon Decays",width=1500,height=800)
 # sim_plot.quad(top=sim_hist, bottom=0, left=sim_edges[:-1], right=sim_edges[1:],fill_color='#58e07c')
 
 output_file("Muon_Decay.html", title="Muon Decay")
 
-layout = column(row(plot, column(tau_slider, lnL_plot, button, tau_slider_ls, chi2_plot)), 
-                row(sim_plot, column(sim_tau_slider, sim_lnL_plot, sim_tau_slider_ls, sim_chi2_plot)))
+layout = column(row(plot, column(tau_slider, lnL_plot, button, tau_slider_ls, chi2_plot, chi2_button)), 
+                row(sim_plot, column(sim_tau_slider, sim_lnL_plot, sim_button, sim_tau_slider_ls, sim_chi2_plot, sim_chi2_button)))
 show(layout)
