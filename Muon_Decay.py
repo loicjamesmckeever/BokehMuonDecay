@@ -135,7 +135,7 @@ def MLE_LS_curve_fitting(hist, edges):
         
         function float_ops(float, int) {
         
-                float_int = Math.round(float*100);
+                var float_int = Math.round(float*100);
                 float_int += int;
                 float_int /= 100;
             return float_int; 
@@ -283,7 +283,7 @@ def MLE_LS_curve_fitting(hist, edges):
         
         function float_ops(float, int) {
         
-                float_int = Math.round(float*100);
+                var float_int = Math.round(float*100);
                 float_int += int;
                 float_int /= 100;
             return float_int; 
