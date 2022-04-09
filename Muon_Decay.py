@@ -307,14 +307,14 @@ lines.pop()
 
 decays = [int(line.split(" ")[0])/1000 for line in lines if int(line.split(" ")[0]) < 40000]
 
-hist, edges = np.histogram(decays,bins=400, range=(0,max(decays)))
+hist, edges = np.histogram(decays,bins=400, range=(0,20))
 plot, tau_slider, lnL_plot, tau_slider_ls, chi2_plot, button, chi2_button = MLE_LS_curve_fitting(hist, edges)
 
 #Simulated data plotting
 tau = 2.2
 sim_decays = [-tau*np.log(rd.random()) for i in range(0,3000)]
 
-sim_hist, sim_edges=np.histogram(sim_decays, bins=400, range=(0,max(sim_decays)))
+sim_hist, sim_edges=np.histogram(sim_decays, bins=400, range=(0,20))
 sim_plot, sim_tau_slider, sim_lnL_plot, sim_tau_slider_ls, sim_chi2_plot, sim_button, sim_chi2_button = MLE_LS_curve_fitting(sim_hist, sim_edges)
 
 #Define CSS style for HTML divs
