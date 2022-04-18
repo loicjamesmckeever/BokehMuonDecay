@@ -11,12 +11,12 @@ import sys
 sys.stderr = open('py.log', 'w')
 
 from bokeh.layouts import column, row
-from bokeh.models import CustomJS, Slider, HoverTool, Label, Button, Div, Range1d
+from bokeh.models import CustomJS, Slider, HoverTool, Label, Button, Div
 from bokeh.plotting import figure, output_file, show, ColumnDataSource
 
-def calculate_chi2(lnbins, y_ls_tau, hist_err_val, hist):
+def calculate_chi2(lnbins, y_ls_tau, hist_err_val, hist, bins):
     B = []
-    for i in range(0,400):
+    for i in range(0,bins):
         l = (lnbins[i]-y_ls_tau[i])**2
         if hist[i] == 0:
             B.append(0)
@@ -26,7 +26,7 @@ def calculate_chi2(lnbins, y_ls_tau, hist_err_val, hist):
     chi2 = sum(B)
     return chi2
 
-def MLE_LS_curve_fitting(hist, edges):
+def MLE_LS_curve_fitting(hist, edges, bins):
     #Calculate the error for each value in the histogram
     hist_err = [(item - np.sqrt(item),item + np.sqrt(item)) for item in hist]
     hist_err_val = [np.sqrt(item) for item in hist]
@@ -39,14 +39,14 @@ def MLE_LS_curve_fitting(hist, edges):
     #Create the MLE curvefit based on tau including the slider and the value of ln(L)
     #x is the time, each value is the center of the edges of the bins of the histogram
     #need a list of 500 of them for the lists being sent to ColumnDataSource to match
-    x = [(edges[j-1]+edges[j])/2 for j in range(1,401)]
+    x = [(edges[j-1]+edges[j])/2 for j in range(1,bins+1)]
     x_datasource = [x for i in range(0,500)]
     #create the tau slider
     tau_slider = Slider(start=0.01, end=5, value=2.5, step=.01, title="Tau")
     #y is our MLE curve fit for each value of tau of our slider
     #Needs to be in list format for Bokeh
     slider_values = np.arange(0.01, 5.01, .01)
-    y = [[((3000*0.05)/slider_value)*np.exp((-x[j-1])/slider_value) for j in range(1,401)] for slider_value in slider_values]
+    y = [[((3000*0.05)/slider_value)*np.exp((-x[j-1])/slider_value) for j in range(1,bins+1)] for slider_value in slider_values]
     #Calculate lnL for each value of tau between .01 and 5
     lnL_nans = [sum([(hist[k-1] * np.log(y[m][k-1]*0.05) - (y[m][k-1]*0.05)) for k in range(1,len(hist)+1)]) for m in range(0,len(slider_values))]
     #Get rid of any nans in lnL to keep JS happy
@@ -155,7 +155,7 @@ def MLE_LS_curve_fitting(hist, edges):
     #List of natural log of each item of the curve fit for each value of tau
     y_ls = [[np.log(item) if item > 0 else 0 for item in y_tau] for y_tau in y]
     #Calculate chi2 for each value of tau
-    chi2s = [calculate_chi2(lnbins, y_ls_tau, hist_err_val, hist) for y_ls_tau in y_ls]
+    chi2s = [calculate_chi2(lnbins, y_ls_tau, hist_err_val, hist, bins) for y_ls_tau in y_ls]
 
     source_ls = ColumnDataSource(data=dict(x=x_datasource,y=y,chi2s=chi2s))
     plot_source_ls = ColumnDataSource(data=dict(x=x,y=y[250]))
@@ -262,16 +262,17 @@ lines = file.split("\n")
 lines.pop()
 
 decays = [int(line.split(" ")[0])/1000 for line in lines if int(line.split(" ")[0]) < 40000]
+bins = int(max(decays)/.05)
 
-hist, edges = np.histogram(decays,bins=400, range=(0,20))
-plot, tau_slider, lnL_plot, button, tau_slider_ls, chi2_plot, chi2_button = MLE_LS_curve_fitting(hist, edges)
+hist, edges = np.histogram(decays,bins=bins, range=(0,max(decays)))
+plot, tau_slider, lnL_plot, button, tau_slider_ls, chi2_plot, chi2_button = MLE_LS_curve_fitting(hist, edges, bins)
 
 #Simulated data plotting
 tau = 2.2
 sim_decays = [-tau*np.log(rd.random()) for i in range(0,3000)]
-
-sim_hist, sim_edges=np.histogram(sim_decays, bins=400, range=(0,20))
-sim_plot, sim_tau_slider, sim_lnL_plot, sim_button, sim_tau_slider_ls, sim_chi2_plot, sim_chi2_button = MLE_LS_curve_fitting(sim_hist, sim_edges)
+sim_bins = int(max(sim_decays)/.05)
+sim_hist, sim_edges=np.histogram(sim_decays, bins=sim_bins, range=(0,max(decays)))
+sim_plot, sim_tau_slider, sim_lnL_plot, sim_button, sim_tau_slider_ls, sim_chi2_plot, sim_chi2_button = MLE_LS_curve_fitting(sim_hist, sim_edges, sim_bins)
 
 #Define CSS style for HTML divs
 style_title = {'font-size': '300%', 'font-family':'Georgia, serif'}
